@@ -18,6 +18,7 @@ import uvicorn
 
 from database import db, init_db
 from auth import verify_password, get_password_hash, create_access_token, SECRET_KEY, ALGORITHM
+from models import User, UserCreate
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional
@@ -133,11 +134,25 @@ disease_classifier = PlantDiseaseClassifier(
 
 app = FastAPI(
     title="Plantonic API",
-    description="Bitki tanıma ve hastalık tespiti",
-    version="1.0.0"
+    description="Plantonic API",
+    version="1.0.0",
+    openapi_tags=[
+        {"name": "health", "description": "Sağlık kontrolü endpoint'leri"},
+        {"name": "auth", "description": "Kimlik doğrulama ve yetkilendirme endpoint'leri"},
+        {"name": "users", "description": "Kullanıcı yönetimi endpoint'leri"},
+        {"name": "identification", "description": "Bitki görüntüleri endpoint'leri"},
+    ]
 )
 
-origins = ["*"]
+# CORS ayarları
+origins = [
+    "http://localhost:3000",
+    "http://localhost:8001",
+    "http://13.60.85.186",
+    "http://13.60.85.186:8001",
+    "*"
+]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -152,19 +167,56 @@ security = HTTPBearer(auto_error=False)
 
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
     if not credentials:
-        raise HTTPException(status_code=401, detail={"status": "error", "message": "Yetkilendirme eksik"})
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "status": "error",
+                "message": "Yetkilendirme başlığı bulunamadı"
+            }
+        )
+    
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
         user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail={"status": "error", "message": "Geçersiz token"})
+        if user_id is None:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "status": "error",
+                    "message": "Geçersiz kimlik bilgileri"
+                }
+            )
+        
         user = db.fetch_one("SELECT * FROM users WHERE id = %s", (user_id,))
-        if not user:
-            raise HTTPException(status_code=401, detail={"status": "error", "message": "Kullanıcı bulunamadı"})
+        if user is None:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "status": "error",
+                    "message": "Kullanıcı bulunamadı"
+                }
+            )
         return user
-    except JWTError:
-        raise HTTPException(status_code=401, detail={"status": "error", "message": "Token doğrulama hatası"})
+        
+    except JWTError as e:
+        print(f"JWT Error: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "status": "error",
+                "message": "Geçersiz token"
+            }
+        )
+    except Exception as e:
+        print(f"Authentication error: {e}")
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "status": "error",
+                "message": "Kimlik doğrulama hatası"
+            }
+        )
 
 
 # ----------------------------------------
@@ -190,35 +242,123 @@ class RegisterResponse(BaseModel):
 # ----------------------------------------
 
 @app.get("/", tags=["health"])
-async def health():
+async def root():
     return {"status": "healthy"}
 
 @app.post("/register", tags=["auth"], response_model=RegisterResponse)
-async def register(user: dict):
-    existing = db.fetch_one("SELECT * FROM users WHERE email = %s", (user["email"],))
-    if existing:
-        raise HTTPException(status_code=400, detail={"status": "error", "message": "Email zaten kayıtlı"})
-    user_id = str(uuid.uuid4())
-    hashed = get_password_hash(user["password"])
-    db.execute_query("INSERT INTO users (id,email,password_hash) VALUES (%s,%s,%s)",
-                     (user_id, user["email"], hashed))
-    return {"status": "success", "message": "Kullanıcı oluşturuldu", "data": {"user_id": user_id, "email": user["email"]}}
+async def register(user: UserCreate):
+    """
+    Yeni kullanıcı kaydı oluşturur.
+    
+    Args:
+        user (UserCreate): Email ve şifre bilgilerini içeren JSON verisi
+        
+    Returns:
+        JSON: Kayıt durumu ve kullanıcı bilgileri
+    """
+    try:
+        # Email kontrolü
+        existing_user = db.fetch_one("SELECT * FROM users WHERE email = %s", (user.email,))
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": "Bu email adresi zaten kayıtlı"
+                }
+            )
+
+        # Yeni kullanıcı oluştur
+        user_id = str(uuid.uuid4())
+        hashed_password = get_password_hash(user.password)
+
+        db.execute_query(
+            "INSERT INTO users (id, email, password_hash) VALUES (%s, %s, %s)",
+            (user_id, user.email, hashed_password),
+        )
+        
+        return {
+            "status": "success",
+            "message": "Kullanıcı başarıyla oluşturuldu",
+            "data": {
+                "user_id": user_id,
+                "email": user.email
+            }
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": "Kayıt işlemi sırasında bir hata oluştu"
+            }
+        )
 
 @app.post("/login", tags=["auth"], response_model=LoginResponse)
 async def login(data: LoginRequest):
-    user = db.fetch_one("SELECT * FROM users WHERE email = %s", (data.email,))
-    if not user or not verify_password(data.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail={"status": "error", "message": "Hatalı email veya şifre"})
-    token = create_access_token(data={"sub": user["id"], "email": user["email"]})
-    return {"status": "success", "data": {"access_token": token, "token_type": "bearer", "user": {"id": user["id"], "email": user["email"]}}}
+    """
+    Kullanıcı girişi yapar ve token döndürür.
+    
+    Args:
+        data (LoginRequest): Email ve şifre bilgilerini içeren JSON verisi
+        
+    Returns:
+        JSON: Token ve kullanıcı bilgileri
+    """
+    try:
+        user = db.fetch_one("SELECT * FROM users WHERE email = %s", (data.email,))
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "status": "error",
+                    "message": "Hatalı email veya şifre"
+                }
+            )
 
-@app.get("/users/me", tags=["users"])
-async def me(current_user=Depends(get_current_user)):
+        if not verify_password(data.password, user["password_hash"]):
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "status": "error",
+                    "message": "Hatalı email veya şifre"
+                }
+            )
+
+        access_token = create_access_token(data={"sub": user["id"], "email": user["email"]})
+        return {
+            "status": "success",
+            "data": {
+                "access_token": access_token,
+                "token_type": "bearer",
+                "user": {
+                    "id": user["id"],
+                    "email": user["email"]
+                }
+            }
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        print(f"Login hatası: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "message": "Giriş işlemi sırasında bir hata oluştu"
+            }
+        )
+
+@app.get("/users/me", response_model=User, tags=["users"])
+async def read_users_me(current_user=Depends(get_current_user)):
     return current_user
 
 @app.get("/users", tags=["users"])
-async def list_users(current_user=Depends(get_current_user)):
-    return db.fetch_all("SELECT id,email,created_at FROM users")
+async def get_users(current_user=Depends(get_current_user)):
+    users = db.fetch_all("SELECT id, email, created_at FROM users")
+    return users
 
 
 # ----------------------------------------
@@ -284,7 +424,7 @@ async def one_identification(image_id: str):
 
 
 @app.get("/version", tags=["health"])
-async def version():
+async def get_version():
     return {"version": "1.4.0"}
 
 

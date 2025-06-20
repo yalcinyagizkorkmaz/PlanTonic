@@ -13,9 +13,13 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt && \
     python3 -m pip install --upgrade pip
 
-# Geri kalan uygulama dosyaları
+# .env ve python dosyalarını kopyala
 COPY .env ./
 COPY *.py ./
+
+# models klasörünü kopyala
 COPY models/ ./models/
+
+
 
 CMD ["python3", "main.py"]
