@@ -1,25 +1,33 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Paket kurulumu ve pip güncelleme tek RUN içinde, apt temizliği de yapılıyor
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Sistem bağımlılıkları (pycairo ve benzeri için)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libcairo2-dev \
+    pkg-config \
+    python3-dev \
+    libgirepository1.0-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Gereksiz dosya kopyalamadan önce sadece ihtiyaç duyulanları taşı
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt && \
-    python3 -m pip install --upgrade pip
-
-# .env ve python dosyalarını kopyala
-COPY .env ./
-COPY *.py ./
-
-# models klasörünü kopyala
-COPY models/ ./models/
+# Environment variables
 
 
+# Gereksinim dosyasını kopyala
+COPY requirements.txt .
 
+# Python bağımlılıklarını yükle
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip cache purge
+
+# Proje dosyalarını kopyala (models klasörü dahil)
+COPY . .
+
+# (Opsiyonel) Build aşamasında models klasörünü doğrula
+RUN ls -l models/
+
+# Uygulamayı başlat
 CMD ["python3", "main.py"]

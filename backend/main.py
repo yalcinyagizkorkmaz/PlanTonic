@@ -1,5 +1,3 @@
-# main.py
-
 import sys
 import os
 import io
@@ -10,6 +8,8 @@ import json
 import numpy as np
 from PIL import Image
 import tensorflow as tf
+from ml_model import PlantLLMGenerator, PlantDiseaseClassifier, PlantIdentificationClassifier
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,91 +24,11 @@ from pydantic import BaseModel
 from typing import Optional
 
 # ----------------------------------------
-# 1) Classifier sınıfları
+# 1) Model & label dosyalarını yükle
 # ----------------------------------------
 
-class TFLiteModelBase:
-    def __init__(self, model_path: str, label_map_path: str, input_size: tuple = (224, 224)):
-        self.input_size = input_size
-
-        # Interpreter yükle
-        self.interpreter = tf.lite.Interpreter(model_path=model_path)
-        self.interpreter.allocate_tensors()
-        inp, out = self.interpreter.get_input_details()[0], self.interpreter.get_output_details()[0]
-        self.input_index = inp['index']
-        self.output_index = out['index']
-        self.quantization = inp.get('quantization', (0.0, 1.0))
-
-        # label_map → index_to_class
-        with open(label_map_path, 'r', encoding='utf-8') as f:
-            label_map = json.load(f)
-        self.index_to_class = {v: k for k, v in label_map.items()}
-
-    def _preprocess(self, img_path: str) -> np.ndarray:
-        img = Image.open(img_path).convert('RGB').resize(self.input_size)
-        arr = np.array(img, dtype=np.float32) / 255.0
-        return np.expand_dims(arr, axis=0)
-
-    def predict(self, img_path: str) -> (str, float):
-        data = self._preprocess(img_path)
-        scale, zero_point = self.quantization
-
-        if scale != 0:
-            data = data / scale + zero_point
-            data = data.astype(np.uint8)
-
-        self.interpreter.set_tensor(self.input_index, data)
-        self.interpreter.invoke()
-        output = self.interpreter.get_tensor(self.output_index)[0]
-
-        if output.dtype == np.uint8:
-            output = (output.astype(np.float32) - zero_point) * scale
-
-        idx = int(np.argmax(output))
-        conf = float(output[idx])
-        cls = self.index_to_class.get(idx, "Unknown")
-        return cls, conf
-
-
-class PlantDiseaseClassifier(TFLiteModelBase):
-    def __init__(self, model_path: str, label_map_path: str, input_size: tuple = (224, 224)):
-        super().__init__(model_path, label_map_path, input_size)
-
-    def disease(self, image_path: str, unhealthy_threshold: float = 0.45) -> dict:
-        lbl, conf = self.predict(image_path)
-        
-        # Confidence kontrolü - 0.55 threshold
-        if conf < unhealthy_threshold:
-            lbl = "Unhealthy"
-        else:
-            lbl = "Healthy"
-            
-        return {
-            "label": lbl,
-            "confidence": conf
-        }
-
-
-class PlantIdentificationClassifier(TFLiteModelBase):
-    def __init__(self, model_path: str, label_map_path: str, launch_data: dict, input_size: tuple = (224, 224)):
-        super().__init__(model_path, label_map_path, input_size)
-        self.launch_data = launch_data
-
-    def identify(self, image_path: str, unhealthy_threshold: float = 0.40) -> dict:
-        cls, conf = self.predict(image_path)
-        status = "healthy"
-        if conf < unhealthy_threshold:
-            status = "unhealthy"
-        return {
-            "label": cls,
-            "confidence": conf,
-            "health_status": status
-        }
-
-
-# ----------------------------------------
-# 2) Model & label dosyalarını yükle
-# ----------------------------------------
+# PlantLLMGenerator instance'ı oluştur
+plant_llm = PlantLLMGenerator()
 
 # launch_data: identify_labels.json içindeki ek bilgiler
 with open("models/labels_atakan.json", "r", encoding="utf-8") as f:
@@ -122,14 +42,13 @@ plant_classifier = PlantIdentificationClassifier(
 )
 
 disease_classifier = PlantDiseaseClassifier(
-    model_path="models/disease_model.tflite",
+    model_path="models/atakan_disease_model.tflite",
     label_map_path="models/disease_labels.json",
     input_size=(224, 224)
 )
 
-
 # ----------------------------------------
-# 3) FastAPI app ve auth ayarları
+# 2) FastAPI app ve auth ayarları
 # ----------------------------------------
 
 app = FastAPI(
@@ -163,7 +82,6 @@ app.add_middleware(
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 security = HTTPBearer(auto_error=False)
-
 
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
     if not credentials:
@@ -218,9 +136,8 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
             }
         )
 
-
 # ----------------------------------------
-# 4) Pydantic modelleri
+# 3) Pydantic modelleri
 # ----------------------------------------
 
 class LoginRequest(BaseModel):
@@ -236,9 +153,8 @@ class RegisterResponse(BaseModel):
     message: str
     data: dict
 
-
 # ----------------------------------------
-# 5) Auth & user endpoint'leri
+# 4) Auth & user endpoint'leri
 # ----------------------------------------
 
 @app.get("/", tags=["health"])
@@ -249,12 +165,6 @@ async def root():
 async def register(user: UserCreate):
     """
     Yeni kullanıcı kaydı oluşturur.
-    
-    Args:
-        user (UserCreate): Email ve şifre bilgilerini içeren JSON verisi
-        
-    Returns:
-        JSON: Kayıt durumu ve kullanıcı bilgileri
     """
     try:
         # Email kontrolü
@@ -300,12 +210,6 @@ async def register(user: UserCreate):
 async def login(data: LoginRequest):
     """
     Kullanıcı girişi yapar ve token döndürür.
-    
-    Args:
-        data (LoginRequest): Email ve şifre bilgilerini içeren JSON verisi
-        
-    Returns:
-        JSON: Token ve kullanıcı bilgileri
     """
     try:
         user = db.fetch_one("SELECT * FROM users WHERE email = %s", (data.email,))
@@ -360,9 +264,8 @@ async def get_users(current_user=Depends(get_current_user)):
     users = db.fetch_all("SELECT id, email, created_at FROM users")
     return users
 
-
 # ----------------------------------------
-# 6) /identification endpoint
+# 5) /identification endpoint
 # ----------------------------------------
 
 UPLOAD_DIR = "uploads"
@@ -382,8 +285,9 @@ async def identify(plant_image: UploadFile = File(...), disease_image: UploadFil
     disease_pil.save(disease_path)
 
     # Tahminler
-    plant_result   = plant_classifier.identify(plant_path)
+    plant_result = plant_classifier.identify(plant_path)
     disease_result = disease_classifier.disease(disease_path)
+    plant_llm_result = plant_llm.ask_gpt(f"Bitki türü: {plant_result['display_label']}, Hastalık: {disease_result['label']}")
 
     # Base64 encode
     with open(plant_path, "rb") as f:
@@ -391,7 +295,7 @@ async def identify(plant_image: UploadFile = File(...), disease_image: UploadFil
     with open(disease_path, "rb") as f:
         disease_b64 = base64.b64encode(f.read()).decode()
 
-    # DB kaydı (opsiyonel)
+    # DB kaydı
     session_id = str(uuid.uuid4())
     db.execute_query("INSERT INTO images (image_id) VALUES (%s),(%s)", (plant_id, disease_id))
     db.execute_query(
@@ -406,10 +310,10 @@ async def identify(plant_image: UploadFile = File(...), disease_image: UploadFil
             "plant_image_id": plant_id,
             "disease_image_id": disease_id,
             "plant_prediction": plant_result,
-            "disease_prediction": disease_result
+            "disease_prediction": disease_result,
+            "plant_llm_result": plant_llm_result
         }
     }
-
 
 @app.get("/identification", tags=["identification"])
 async def all_identifications():
@@ -422,14 +326,12 @@ async def one_identification(image_id: str):
         raise HTTPException(status_code=404, detail="Not found")
     return rec
 
-
 @app.get("/version", tags=["health"])
 async def get_version():
     return {"version": "1.4.0"}
 
-
 # ----------------------------------------
-# 7) Uvicorn çalıştırma
+# 6) Uvicorn çalıştırma
 # ----------------------------------------
 
 if __name__ == "__main__":

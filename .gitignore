@@ -112,7 +112,7 @@ fastlane/screenshots/
 fastlane/test_output/
 
 # Environment files
-.env
+
 *.xcconfig
 
 # Any Secrets (API keys, etc.)

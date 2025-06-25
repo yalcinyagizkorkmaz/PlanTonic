@@ -10,3 +10,5 @@ requests==2.32.3
 tensorflow==2.19.0
 numpy==1.26.4
 Pillow==11.1.0
+pycairo==1.28.0
+openai==0.28.1
