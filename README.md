@@ -71,77 +71,79 @@ PlanTonic bridges the gap between amateur plant enthusiasts and expert-level car
 <img width="500" alt="Ekran Resmi 2025-06-27 15 23 02" src="https://github.com/user-attachments/assets/485295ad-1f86-4d49-9074-5c3f8a78de07" />
 
 
+## 🔧 Features
 
-## 🔧 Özellikler
+* User registration and login (JWT-based authentication)
+* Multi-user support based on Family ID
+* SQLite-based database
+* Predictions using a TFLite machine learning model
+* Testable API with Swagger UI
+* Easy deployment with Dockerfile
 
-- Kullanıcı kayıt ve giriş işlemleri (JWT token tabanlı)
-- Aile ID bazlı çoklu kullanıcı desteği
-- SQLite tabanlı veritabanı
-- TFLite makine öğrenimi modeli ile tahminleme
-- Swagger arayüzü ile test edilebilir API
-- Dockerfile ile kolay deployment
-
-## 🗂️ Proje Yapısı
+## 📂 Project Structure
 
 ```
 .
-├── auth.py              # Kimlik doğrulama ve token üretimi
-├── database.py          # Veritabanı bağlantısı ve oturumu
-├── main.py              # FastAPI ana uygulama dosyası
-├── models.py            # Pydantic ve SQLAlchemy modelleri
-├── ml_model.py          # TensorFlow Lite model yükleme ve tahmin fonksiyonu
-├── model.tflite         # Eğitimli ML modeli (TFLite formatında)
-├── Dockerfile           # Docker yapılandırma dosyası
-└── docker build .dockerfile  # Alternatif Docker build komutu içeren dosya
+├── auth.py              # Authentication and token generation
+├── database.py          # Database connection and session
+├── main.py              # Main FastAPI application
+├── models.py            # Pydantic and SQLAlchemy models
+├── ml_model.py          # TensorFlow Lite model loading and prediction function
+├── model.tflite         # Trained ML model in TFLite format
+├── Dockerfile           # Docker configuration file
+└── docker build .dockerfile  # File with alternative Docker build command
 ```
 
-## 🚀 Kurulum ve Başlatma
+## 🚀 Setup & Run
 
-### 1. Klonla
+### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/kullaniciAdi/proje-adi.git
-cd proje-adi
+git clone https://github.com/username/project-name.git
+cd project-name
 ```
 
-### 2. Gereksinimleri Yükle (Opsiyonel - Docker kullanmıyorsan)
+### 2. Install Requirements (Optional - if not using Docker)
 
 ```bash
 pip install -r requirements.txt
 ```
 
-> Not: `requirements.txt` dosyası oluşturulmamışsa, kullandığınız kütüphaneler:
-> `fastapi`, `uvicorn`, `sqlalchemy`, `pydantic`, `python-jose`, `bcrypt`, `tensorflow`, `tflite-runtime`, `passlib` vs.
+> Note: If `requirements.txt` is not available, the main libraries used are:
+> `fastapi`, `uvicorn`, `sqlalchemy`, `pydantic`, `python-jose`, `bcrypt`, `tensorflow`, `tflite-runtime`, `passlib`, etc.
 
-### 3. Uygulamayı Çalıştır
+### 3. Run the Application
 
-#### a) Geliştirme için:
+#### a) For Development:
 
 ```bash
 uvicorn main:app --reload
 ```
 
-#### b) Docker ile:
+#### b) With Docker:
 
 ```bash
 docker build -t auth-ml-app .
 docker run -d -p 8000:8000 auth-ml-app
 ```
 
-### 4. API Arayüzü
+### 4. API Interface
 
-Tarayıcıdan eriş:
+Accessible via browser:
+
 ```
 http://localhost:8000/docs
 ```
 
-## 🔐 Kimlik Doğrulama
+## 🔐 Authentication
 
-- `/register`: Kullanıcı kaydı
-- `/login`: Kullanıcı girişi (JWT token döner)
-- Diğer uç noktalara erişim için JWT token'ı `Authorization: Bearer <token>` başlığı ile gönderin.
+* `/register`: User registration
+* `/login`: User login (returns JWT token)
+* For other endpoints, include the JWT token in the `Authorization: Bearer <token>` header.
 
-## 🧠 ML Modeli Kullanımı
+## 🧠 ML Model Usage
 
-- `/predict`: Eğitimli TFLite model ile tahmin yapılır.
-  - Gövdeye uygun veri göndererek sonuç alınabilir.
+* `/predict`: Makes a prediction using the trained TFLite model.
+
+  * Submit appropriate data in the request body to receive a result.
+
