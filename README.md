@@ -1,45 +1,79 @@
-**Edit a file, create a new file, and clone from Bitbucket in under 2 minutes**
+# User Authentication & ML-Driven Prediction API
 
-When you're done, you can delete the content in this README and update the file with details for others getting started with your repository.
+PLANTONIC 
+![Uploading Ekran Resmi 2025-06-27 15.22.25.png…]()
 
-*We recommend that you open this README in another tab as you perform the tasks below. You can [watch our video](https://youtu.be/0ocf7u76WSo) for a full demo of all the steps in this tutorial. Open the video in a new tab to avoid leaving Bitbucket.*
 
----
+## 🔧 Özellikler
 
-## Edit a file
+- Kullanıcı kayıt ve giriş işlemleri (JWT token tabanlı)
+- Aile ID bazlı çoklu kullanıcı desteği
+- SQLite tabanlı veritabanı
+- TFLite makine öğrenimi modeli ile tahminleme
+- Swagger arayüzü ile test edilebilir API
+- Dockerfile ile kolay deployment
 
-You’ll start by editing this README file to learn how to edit a file in Bitbucket.
+## 🗂️ Proje Yapısı
 
-1. Click **Source** on the left side.
-2. Click the README.md link from the list of files.
-3. Click the **Edit** button.
-4. Delete the following text: *Delete this line to make a change to the README from Bitbucket.*
-5. After making your change, click **Commit** and then **Commit** again in the dialog. The commit page will open and you’ll see the change you just made.
-6. Go back to the **Source** page.
+```
+.
+├── auth.py              # Kimlik doğrulama ve token üretimi
+├── database.py          # Veritabanı bağlantısı ve oturumu
+├── main.py              # FastAPI ana uygulama dosyası
+├── models.py            # Pydantic ve SQLAlchemy modelleri
+├── ml_model.py          # TensorFlow Lite model yükleme ve tahmin fonksiyonu
+├── model.tflite         # Eğitimli ML modeli (TFLite formatında)
+├── Dockerfile           # Docker yapılandırma dosyası
+└── docker build .dockerfile  # Alternatif Docker build komutu içeren dosya
+```
 
----
+## 🚀 Kurulum ve Başlatma
 
-## Create a file
+### 1. Klonla
 
-Next, you’ll add a new file to this repository.
+```bash
+git clone https://github.com/kullaniciAdi/proje-adi.git
+cd proje-adi
+```
 
-1. Click the **New file** button at the top of the **Source** page.
-2. Give the file a filename of **contributors.txt**.
-3. Enter your name in the empty file space.
-4. Click **Commit** and then **Commit** again in the dialog.
-5. Go back to the **Source** page.
+### 2. Gereksinimleri Yükle (Opsiyonel - Docker kullanmıyorsan)
 
-Before you move on, go ahead and explore the repository. You've already seen the **Source** page, but check out the **Commits**, **Branches**, and **Settings** pages.
+```bash
+pip install -r requirements.txt
+```
 
----
+> Not: `requirements.txt` dosyası oluşturulmamışsa, kullandığınız kütüphaneler:
+> `fastapi`, `uvicorn`, `sqlalchemy`, `pydantic`, `python-jose`, `bcrypt`, `tensorflow`, `tflite-runtime`, `passlib` vs.
 
-## Clone a repository
+### 3. Uygulamayı Çalıştır
 
-Use these steps to clone from SourceTree, our client for using the repository command-line free. Cloning allows you to work on your files locally. If you don't yet have SourceTree, [download and install first](https://www.sourcetreeapp.com/). If you prefer to clone from the command line, see [Clone a repository](https://confluence.atlassian.com/x/4whODQ).
+#### a) Geliştirme için:
 
-1. You’ll see the clone button under the **Source** heading. Click that button.
-2. Now click **Check out in SourceTree**. You may need to create a SourceTree account or log in.
-3. When you see the **Clone New** dialog in SourceTree, update the destination path and name if you’d like to and then click **Clone**.
-4. Open the directory you just created to see your repository’s files.
+```bash
+uvicorn main:app --reload
+```
 
-Now that you're more familiar with your Bitbucket repository, go ahead and add a new file locally. You can [push your change back to Bitbucket with SourceTree](https://confluence.atlassian.com/x/iqyBMg), or you can [add, commit,](https://confluence.atlassian.com/x/8QhODQ) and [push from the command line](https://confluence.atlassian.com/x/NQ0zDQ).
+#### b) Docker ile:
+
+```bash
+docker build -t auth-ml-app .
+docker run -d -p 8000:8000 auth-ml-app
+```
+
+### 4. API Arayüzü
+
+Tarayıcıdan eriş:
+```
+http://localhost:8000/docs
+```
+
+## 🔐 Kimlik Doğrulama
+
+- `/register`: Kullanıcı kaydı
+- `/login`: Kullanıcı girişi (JWT token döner)
+- Diğer uç noktalara erişim için JWT token'ı `Authorization: Bearer <token>` başlığı ile gönderin.
+
+## 🧠 ML Modeli Kullanımı
+
+- `/predict`: Eğitimli TFLite model ile tahmin yapılır.
+  - Gövdeye uygun veri göndererek sonuç alınabilir.
