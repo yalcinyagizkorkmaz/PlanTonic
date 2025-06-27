@@ -1,7 +1,8 @@
 # User Authentication & ML-Driven Prediction API
 
 PLANTONIC 
-![Uploading Ekran Resmi 2025-06-27 15.22.25.png…]()
+<img width="500" alt="Ekran Resmi 2025-06-27 15 23 02" src="https://github.com/user-attachments/assets/485295ad-1f86-4d49-9074-5c3f8a78de07" />
+
 
 
 ## 🔧 Özellikler
